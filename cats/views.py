@@ -1,13 +1,33 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
+from rest_framework.throttling import ScopedRateThrottle
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Achievement, Cat, User
-
 from .serializers import AchievementSerializer, CatSerializer, UserSerializer
+from .throttling import WorkingHoursRateThrottle
+from .permissions import OwnerOrReadOnly, ReadOnly
+from .pagination import CatsPagination
 
 
 class CatViewSet(viewsets.ModelViewSet):
     queryset = Cat.objects.all()
     serializer_class = CatSerializer
+    permission_classes = (OwnerOrReadOnly,)
+    filter_backends = (
+        DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter
+        )
+    throttle_classes = (WorkingHoursRateThrottle, ScopedRateThrottle)
+    # throttle_scope = 'low_request'  # ограничение на кол-во запросов в 1 минуту (установлено в settings.py)
+    pagination_class = None  # CatsPagination  # пагинация (отключена)
+    filterset_fields = ('color', 'birth_year')  # допустимые поля для поиска по значеням
+    search_fields = ('name',)  # допустимые поля для поиска по вхождению
+    ordering_fields = ('name', 'birth_year')  # допустимые поля для сортировки
+    ordering = ('birth_year',)  # сортировка по умолчанию
+
+    def get_permissions(self):
+        if self.action == 'retrieve':
+            return (ReadOnly(),)
+        return super().get_permissions() 
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user) 
